@@ -1,25 +1,30 @@
 {
   "name": "flash-arb-bot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Aave V3 flash-loan arbitrage bot for Arbitrum: zero-principal on-chain swaps triggered by an off-chain DEX price scanner.",
-  "license": "MIT",
+  "type": "module",
   "scripts": {
-    "compile": "hardhat compile",
+    "build": "hardhat compile",
     "test": "hardhat test",
-    "deploy": "hardhat run scripts/deploy.js --network arbitrum",
-    "deploy:testnet": "hardhat run scripts/deploy.js --network arbitrumSepolia",
-    "scan": "node bot/index.js"
-  },
-  "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "hardhat": "^2.22.0",
-    "solc": "^0.8.20"
+    "simulate": "hardhat test test/ten-trade-simulation.ts",
+    "bot": "tsx src/bot/index.ts",
+    "bot:once": "tsx src/bot/index.ts --once",
+    "app": "tsx src/app/server.ts",
+    "app:demo": "DEMO_MODE=true AUTO_START=true tsx src/app/server.ts",
+    "deploy": "tsx scripts/deploy.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aave/core-v3": "^1.19.3",
-    "@openzeppelin/contracts": "^5.0.2",
-    "dotenv": "^16.4.5",
-    "ethers": "^6.13.0"
-  }
+    "@openzeppelin/contracts": "5.6.1",
+    "dotenv": "17.2.2",
+    "viem": "2.56.8"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",
+    "@types/node": "24.5.2",
+    "hardhat": "3.17.0",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2"
+  },
+  "packageManager": "pnpm@11.11.0"
 }
