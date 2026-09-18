@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@nomicfoundation/hardhat-utils@4.2.0'
+  - hardhat@3.17.0
+  - viem@2.56.8

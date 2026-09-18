@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090b10" />
+    <title>Flash Arb Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <span class="mark">F</span>
+          <div>
+            <h1>Flash Arb</h1>
+            <p>Atomic opportunity console</p>
+          </div>
+        </div>
+        <div class="controls">
+          <span id="mode" class="badge"></span>
+          <button id="connect" class="secondary" type="button">Connect MetaMask</button>
+          <button id="toggle" type="button">Start scanner</button>
+        </div>
+      </header>
+
+      <section id="demo-warning" class="warning hidden">
+        Synthetic demo data — no RPC, wallet, or real trades are connected.
+      </section>
+
+      <section class="metrics" aria-label="Bot status">
+        <article>
+          <span>Wallet</span>
+          <strong id="wallet">—</strong>
+          <small>gas bankroll</small>
+        </article>
+        <article>
+          <span>Route workers</span>
+          <strong id="workers">0</strong>
+          <small>parallel scanners</small>
+        </article>
+        <article>
+          <span>Scan interval</span>
+          <strong id="interval">—</strong>
+          <small>five-second hard cap</small>
+        </article>
+        <article>
+          <span>Last scan</span>
+          <strong id="last-scan">waiting</strong>
+          <small id="last-result">no quote yet</small>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="panel opportunity">
+          <div class="panel-title">
+            <div>
+              <span class="eyebrow">Best simulated opportunity</span>
+              <h2 id="route">Scanning markets…</h2>
+            </div>
+            <span id="simulated" class="proof">SIM REQUIRED</span>
+          </div>
+          <div class="profit-row">
+            <div>
+              <span>Expected net</span>
+              <strong id="profit">—</strong>
+            </div>
+            <div>
+              <span>Borrow size</span>
+              <strong id="borrow">—</strong>
+            </div>
+            <div>
+              <span>Buffered gas</span>
+              <strong id="gas">—</strong>
+            </div>
+          </div>
+          <p class="caption">
+            Only the highest expected net return is eligible each cycle. The exact calldata must pass simulation before broadcast.
+          </p>
+        </article>
+
+        <article class="panel activity-panel">
+          <div class="panel-title">
+            <div>
+              <span class="eyebrow">Live engine log</span>
+              <h2>Activity</h2>
+            </div>
+            <span id="pulse" class="pulse"></span>
+          </div>
+          <ol id="activity" class="activity" tabindex="0" aria-label="Scanner activity log"></ol>
+        </article>
+      </section>
+
+      <footer>
+        <span>Profit is never guaranteed.</span>
+        <span>Private keys stay in the local process environment.</span>
+      </footer>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,84 +1,90 @@
-# Flash Loan Arbitrage Bot
-This repo holds a functional implementation of flash loan and arbitrage swap on Ethereum developed and executed last year.
+# Flash Arb Console
 
-## Why are you releasing it? 
-It created lower-than-expected returns, so I moved on. I think it might be useful for others as learning material. 
-<br><br>
-Even though it made some [profits live](https://ethtx.info/mainnet/0x0f3a3dbc5d6887c08b4f1bf039b3676aa4ba0256e7e4f6d6d94ceb0e50fff9ea/), it wasn't up to my expectations. Although there were some little miscalculations, here is a summary of one of my profitable transactions:
+A guarded Aave V3 flash-loan arbitrage executor, parallel opportunity scanner, and small local dashboard for low-fee EVM networks.
 
-![](https://raw.githubusercontent.com/manuelinfosec/flash-arb-bot/main/images/summary.jpg)
+This is not a guaranteed-profit system. With a $5–10 wallet, the realistic use of funds is transaction gas on a low-fee chain; the borrowed trading principal comes from Aave and is repaid atomically. Competition, stale quotes, MEV, RPC latency, contract risk, and gas can still make live operation unprofitable.
 
-I made two other iterations of this arbitrage which will be released shortly, with similar commentary.
+## What changed
 
-## Overview
+The original contracts were incomplete, depended on retired Ropsten/Aave V1-era interfaces, swallowed failed swaps, and could repay a bad trade from deposited funds. They have been replaced by:
 
-This is a simple working example of a flash arbitrage smart contract. Within a single transaction it:
-1. Instantly flash borrows a certain asset (ETH in this example) from Aave lending pools with zero collateral
-2. Calls UniswapV2 Router02 to wrap the flash liquidity of ETH into WETH and exchange it for DAI tokens
-3. Checks the exchange rate of DAI back into ETH on Sushiswap V1
-4. Calls SushiswapV1 Router02 to swap the DAI back into WETH and then ETH
-5. There's also an independent function to withdraw all ETH and ERC20 tokens at the contract owner's discretion
+- `contracts/FlashArbitrage.sol`: Aave V3 `flashLoanSimple`, multi-hop V2-style routes, router allowlist, owner/keeper separation, exact callback binding, allowance cleanup, two-step ownership, withdrawals, and a profit check that cannot spend the contract's pre-existing balance.
+- `src/bot/`: concurrent route/size quoting, conservative flash-fee math, buffered gas accounting, net-profit filtering, exact calldata simulation, and single-best-candidate execution.
+- `src/app/`: a lightweight local dashboard that runs on Fedora through Node; it never receives or displays the private key.
+- `test/ten-trade-simulation.ts`: ten local contract-level scenarios with nine profitable executions and one adverse route that is rejected atomically.
 
-Before you start playing with this I highly recommend to have a read of the [Aave Flash Loan mechanism](https://aave.com/flash-loans) and get an indepth conceptual understanding, as it's equally important as understanding the code.
+## Safety model
 
-Since Sushiswap is a fork of UniswapV2, I also suggest familiarising yourself with the Uniswap V2 guide on [trading via smart contracts](https://uniswap.org/docs/v2/smart-contract-integration/trading-from-a-smart-contract/), particularly if you plan on adding more swaps to your arbitrage strategy.
+Every live candidate must pass all of these gates:
 
+1. Both router quotes close the route back into wrapped native gas currency.
+2. Expected output repays principal and a conservatively rounded flash fee.
+3. Buffered gas cost and the configured minimum net profit fit inside the spread.
+4. The exact transaction calldata passes `eth_call` simulation from the keeper account.
+5. The contract independently enforces router approval, path closure, deadline, slippage, repayment, and minimum profit.
 
-## Deployment
+Only the best expected net candidate is eligible per scan cycle. Parallel workers do not submit concurrent transactions from one wallet. The default is scan-only; live sending requires `LIVE_TRADING=true` and a matching private key.
 
-The contract can be deployed unto Remix, using solidity compiler 0.6.12, and Metamask using Injected Web3.
+## Install and validate
 
-On deployment, set the following parameters:
+Node 24 and pnpm 11 are the tested toolchain.
 
-![](https://raw.githubusercontent.com/manuelinfosec/flash-arb-bot/main/images/Deployment.PNG)
+```bash
+pnpm install
+pnpm build
+pnpm typecheck
+pnpm test
+pnpm simulate
+```
 
-- ***_AaveLendingPool:*** the LendingPoolAddressesProvider address corresponding to the deployment environment. see [Deployed Contract Instances](https://docs.aave.com/developers/deployed-contracts/deployed-contract-instances).
-- ***_UniswapV2Router:*** the Router02 address for UniswapV2 see [here](https://uniswap.org/docs/v2/smart-contracts/router02/).
-- ***_SushiswapV1Router:*** the Router02 address for SushiswapV1. There isn't an official testnet router02 so for demo purposes you can just use the uniswapV2 address when playing on the testnet since their codebase is identical (for now - which may not be the case in the future). Alternatively see [Sushiswap repo](https://github.com/sushiswap/sushiswap) for the mainnet router02 address to test in prod or deploy your own version of Router02 onto testnet.
-- Click 'transact' and approve the Metamask pop up.
-- Once the flash arb contract is deployed, send some ETH or ERC20 token to this contract depending on what asset you're planning to flash borrow from Aave in case you need extra funds to cover the flash fee.
+The acceptance command must print `9/10 profitable executions (90%)`, one adverse trade protected, and zero live transactions sent. These are controlled local scenarios, not evidence of a 90% win rate on a live market.
 
+## Preview the Fedora dashboard
 
-## Execution
+The demo is explicitly synthetic and needs no wallet or RPC:
 
-On execution, set the following parameters:
+```bash
+pnpm app:demo
+```
 
-![](https://raw.githubusercontent.com/manuelinfosec/flash-arb-bot/main/images/Execution.PNG)
+Open `http://127.0.0.1:4173`. For real scan-only data, copy the examples and fill in current chain addresses:
 
-- ***_flashAsset:*** address of the asset you want to flash loan. e.g. ETH is 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE. If you want to flash anything else see [Reserved Assets](https://docs.aave.com/developers/deployed-contracts/deployed-contract-instances#reserves-assets) but you will need to adjust the executeArbitrage() function accordingly.
-- ***_flashAmount:*** how much of _flashAsset you want to borrow, demoniated in wei (e.g. 1000000000000000000 for 1 ether).
-- ***_daiTokenAddress:*** for this demo we're swapping with the DAI token, so lookup the reserved address of the DAI token. See [Reserved Assets](https://docs.aave.com/developers/deployed-contracts/deployed-contract-instances#reserves-assets).
-- ***_amountToTrade:*** how much of the newly acquired _flashAsset you'd like to use as part of this arbitrage.
-- ***_tokensOut:*** how much of the ERC20 tokens from the first swap would you like to swap back to complete the arb. Denominated in actual tokens, i.e. 1 = 1 DAI token.
-- Click 'transact' and approve in Metamask.
+```bash
+cp .env.example .env
+cp config/routes.example.json config/routes.json
+pnpm app
+```
 
+The scanner defaults to 2.5-second cycles and refuses intervals above five seconds. Quote workers for all routes, both DEX directions, and all configured borrow sizes run concurrently. Slow RPC calls time out after four seconds.
 
+The **Connect MetaMask** button verifies the selected browser-wallet account and requests the configured EVM chain. It never requests a signature or private key. For unattended trading, export only the dedicated bot account's key into the local `.env`; MetaMask itself intentionally requires interactive approval and cannot auto-sign every opportunity. Never use or export the key for a primary wallet.
 
-## Result
-![](https://raw.githubusercontent.com/manuelinfosec/flash-arb-bot/main/images/TXResult.PNG)
+## Configure routes
 
-If all goes well, a successful execution of this contract looks like [this (Ropsten testnet)](https://ropsten.etherscan.io/tx/0xc1da19c7a5e189b372ec3b310453d7ee267da5df661ee61833230470e5b97fd8).
+Use only a low-fee Aave V3 network where the wrapped-native asset is flash-loan enabled and both selected exchanges expose a trusted Uniswap V2-compatible router. Obtain provider, token, and router addresses from the protocols' official deployment registries and verify each address on the target chain.
 
-## Updates
-- Added V2 contract for a more recent deployment.
-- Expected to provide more promising results for arbitraging with flash loans.
+For accurate all-in profit accounting, every route's `borrowToken` must equal `WRAPPED_NATIVE_TOKEN`; this lets the engine compare profit and gas in the same unit. Add intermediate tokens to `buyPath` and reverse them in `sellPath`. `bidirectional: true` scans both router orders. More route objects create more independent workers.
 
-## Tips for further customization
-- This contract would typically be executed by a Web3py bot (beyond this scope) via a web3.eth.Contract() call, referencing the deployed address of this contract and its corresponding ABI. You would usually get the bot to interact with price aggregators such as [1inch](https://1inch.exchange) to assess arb opportunities and execute this contract if the right opportunity is found.
-- To have any chance of getting in front of other arbitrage bots on significant arb opportunities the Web3py bot needs to be hosted on your own fast Ethereum node. You will most likely come off second best going through the Infura API to interact with the Ethereum blockchain.
-- Some people like to get an unfair advantage by building Transaction-Ordering Dependence (front running) capabilities into the Web3py. However this smart contract would then need to be significantly more complex and flexible enough to cater for a wide range of arbitrage permutations across multiple protocols.
-- User specified parameters (as opposed to hardcoded variables) should be passed via the flashloan() function in the first instance. You can subsequently set these parameters to contract variables with higher visibility across the contract.
-- There are no direct ETH pairs in UniswapV2 therefore the need for a WETH wrapper. Since Sushiswap is forked from UniswapV2 you'll need to wrap in WETH as well.
+Start with `LIVE_TRADING=false` and inspect scan-only results for a meaningful period. A standard public RPC/public mempool is usually too slow and exposes profitable calldata to copying; use a reputable private-transaction-capable endpoint if the target chain supports it.
 
-## Connect with me
-If you appreciate this, leave the repo a star and feel free to follow me on:
+## Deploy only after simulation
 
-[![Manuel Twitter](https://img.shields.io/badge/Twitter-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/manuelinfoec)
-[![Chiemezie Njoku Linkedin](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/manuelinfosec/)
-[![Manuel Medium](https://img.shields.io/badge/Medium-000000?style=for-the-badge&logo=medium&logoColor=white)](https://manuelinfosec.medium.com/)
+Create a dedicated wallet, fund it with only the amount you can afford to lose, and keep its private key solely in the untracked `.env`. Build and run the local acceptance simulation before enabling deployment:
 
-## Appreciation
-You could also donate:
+```bash
+pnpm build
+pnpm simulate
+DEPLOY_CONFIRM=I_HAVE_RUN_THE_10_TRADE_SIMULATION pnpm deploy
+```
 
-Ethereum/Binance Smart Chain/Polygon/Avalanche/etc address: 0xE882D838eF07e796bf6b19636931F143e3eC4Dc3
-<br /><br />
+The deployment script verifies the Aave provider and routers have bytecode, deploys the executor, allowlists every configured router, and authorizes `KEEPER_ADDRESS`. It prints the value to place in `EXECUTOR_ADDRESS`.
+
+Run at least several days in scan-only mode before considering `LIVE_TRADING=true`. Set `MIN_WALLET_RESERVE_NATIVE` high enough that a transaction can never consume the full gas wallet. Profits remain in the executor until the owner calls `withdrawToken`; monitor and withdraw them deliberately.
+
+## Limits
+
+- The included executor supports V2-style `swapExactTokensForTokens` routers, not Uniswap V3 concentrated-liquidity paths or aggregator calldata.
+- Fee-on-transfer and rebasing tokens are intentionally unsupported.
+- Gas estimation on L2s can omit part of the L1 data fee; use `FIXED_GAS_OVERHEAD_NATIVE` plus the default 150% buffer and tune from measured receipts.
+- Local tests use deterministic mock liquidity. Before real funds, fork the exact target chain at a recent block and perform an independent smart-contract audit.
+- This repository does not include sandwiching, front-running, honeypot sniping, or other strategies that depend on harming another trader.
